@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>智能客服 · 网页对话</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  body { margin:0; font-family:-apple-system,'PingFang SC','Segoe UI',sans-serif; background:#f4f6fb; }
+  #app { max-width:720px; margin:24px auto; background:#fff; border-radius:12px;
+         box-shadow:0 8px 30px rgba(0,0,0,0.08); display:flex; flex-direction:column;
+         height:88vh; overflow:hidden; }
+  header { padding:16px 20px; background:linear-gradient(135deg,#4f46e5,#06b6d4); color:#fff; font-weight:600; }
+  #log { flex:1; padding:16px 20px; overflow-y:auto; }
+  .msg { margin:10px 0; display:flex; }
+  .bubble { max-width:75%; padding:10px 14px; border-radius:14px; line-height:1.5; white-space:pre-wrap; }
+  .me { justify-content:flex-end; }
+  .me .bubble { background:#4f46e5; color:#fff; border-bottom-right-radius:4px; }
+  .bot .bubble { background:#eef0fa; color:#222; border-bottom-left-radius:4px; }
+  .system .bubble { background:#fef3c7; color:#92400e; font-size:13px; }
+  .meta { font-size:11px; color:#888; margin:4px 8px; }
+  footer { display:flex; padding:12px; border-top:1px solid #eee; gap:8px; }
+  input { flex:1; padding:10px 14px; border:1px solid #ddd; border-radius:24px; outline:none; font-size:14px; }
+  button { padding:10px 20px; border:none; border-radius:24px; background:#4f46e5; color:#fff; cursor:pointer; }
+  button:disabled { opacity:0.5; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>👋 智能客服 (多 Agent · 中文)</header>
+  <div id="log"></div>
+  <footer>
+    <input id="input" placeholder="请输入您的问题，例如：我的订单 20240518001 还没收到..." />
+    <button id="send">发送</button>
+  </footer>
+</div>
+<script>
+  const log = document.getElementById('log');
+  const input = document.getElementById('input');
+  const sendBtn = document.getElementById('send');
+  let sessionId = localStorage.getItem('cs_session_id') || null;
+
+  function addMsg(role, text, agent) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg ' + (role === 'user' ? 'me' : (role === 'system' ? 'system' : 'bot'));
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
+    if (agent) {
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = '[' + agent + ']';
+      wrap.appendChild(meta);
+    }
+    log.appendChild(wrap);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(proto + '//' + location.host + '/ws/chat');
+  ws.onopen = () => {
+    addMsg('system', '已连接，请输入您的问题。');
+    ws.send(JSON.stringify({ type: 'init', session_id: sessionId, customer_name: 'guest' }));
+  };
+  ws.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    if (data.type === 'ack') {
+      sessionId = data.session_id;
+      localStorage.setItem('cs_session_id', sessionId);
+    } else if (data.type === 'agent') {
+      addMsg('bot', data.content, data.agent_name);
+      if (data.handoff_to_human) {
+        addMsg('system', '已为您转接人工客服，请稍候。');
+      }
+    } else if (data.type === 'human') {
+      addMsg('bot', data.content, '人工: ' + data.operator);
+    } else if (data.type === 'system') {
+      addMsg('system', data.content);
+    } else if (data.type === 'error') {
+      addMsg('system', '错误: ' + data.message);
+    }
+  };
+  ws.onclose = () => addMsg('system', '连接已断开，请刷新页面重试。');
+
+  function send() {
+    const text = input.value.trim();
+    if (!text) return;
+    addMsg('user', text);
+    ws.send(JSON.stringify({ type: 'message', content: text }));
+    input.value = '';
+  }
+  sendBtn.onclick = send;
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+</script>
+</body>
+</html>

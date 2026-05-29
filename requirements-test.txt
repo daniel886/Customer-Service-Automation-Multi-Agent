@@ -1,0 +1,11 @@
+# Minimal requirements just to run the included tests on Python 3.9.
+# Heavy deps (chromadb, langchain, pyautogen) are skipped here.
+pytest==8.3.3
+pytest-asyncio==0.24.0
+pydantic==2.9.2
+pydantic-settings==2.5.2
+python-dotenv==1.0.1
+loguru==0.7.2
+sqlalchemy==2.0.35
+aiosqlite==0.20.0
+greenlet==3.0.3
